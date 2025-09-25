@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Debug Frenzy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* CSS tùy chỉnh để bổ sung cho Tailwind */
+      body {
+        font-family: "Fira Code", monospace;
+        background-color: #1a1b26; /* Màu nền giống IDE */
+        color: #c0c5f0;
+        overflow: hidden;
+        user-select: none;
+      }
+
+      /* Hiệu ứng trồi lên của BUG */
+      .bug-spawn {
+        animation: spawn 0.3s ease-out forwards;
+      }
+
+      @keyframes spawn {
+        from {
+          transform: scale(0);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      /* Hiệu ứng fix BUG */
+      .bug-fixed {
+        animation: fixed 0.3s ease-in forwards;
+      }
+
+      @keyframes fixed {
+        from {
+          transform: scale(1);
+          opacity: 1;
+        }
+        to {
+          transform: scale(1.5);
+          opacity: 0;
+        }
+      }
+
+      /* Giao diện modal */
+      .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.7);
+      }
+
+      .modal-content {
+        background-color: #24283b;
+        border: 1px solid #414868;
+      }
+
+      /* Thanh stress */
+      .stress-bar-inner {
+        transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out;
+      }
+
+      /* Hiệu ứng con trỏ */
+      #game-canvas {
+        cursor: crosshair;
+      }
+      .bug {
+        cursor: pointer;
+      }
+      .code-bg {
+        white-space: pre-wrap;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #565f89;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+        z-index: 1;
+      }
+      .bug,
+      .modal-backdrop {
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body class="flex items-center justify-center h-screen">
+    <div
+      id="game-container"
+      class="w-full max-w-4xl h-[90vh] max-h-[700px] bg-[#1e1e2e] rounded-lg shadow-2xl flex flex-col p-4 relative border border-gray-700"
+    >
+      <!-- Header: Điểm, Stress, Nút End -->
+      <header class="flex justify-between items-center mb-4 px-2 z-20">
+        <div class="text-lg">
+          <span>Score: <span id="score">0</span></span>
+          <span class="ml-4">High Score: <span id="high-score">0</span></span>
+        </div>
+        <div class="flex items-center w-1/3">
+          <span class="mr-2 text-sm">STRESS:</span>
+          <div
+            id="stress-bar-container"
+            class="w-full bg-gray-700 rounded-full h-4 border border-gray-600"
+          >
+            <div
+              id="stress-bar"
+              class="h-full rounded-full stress-bar-inner"
+              style="width: 0%; background-color: #4caf50"
+            ></div>
+          </div>
+        </div>
+        <button
+          id="end-game-btn"
+          class="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-2 px-4 rounded transition-colors"
+        >
+          End Game
+        </button>
+      </header>
+
+      <!-- Canvas Game -->
+      <main
+        id="game-canvas"
+        class="flex-1 bg-[#16161e] rounded-md relative overflow-hidden"
+      >
+        <!-- Nền code giả lập -->
+        <pre class="code-bg"><code>const initializeGame = () => {
+  let score = 0;
+  let stressLevel = 0;
+  const bugs = new Set();
+
+  const gameLoop = setInterval(() => {
+    if (Math.random() > 0.5) {
+      spawnBug();
+    }
+  }, 1000);
+
+  function spawnBug() {
+    // Create a new bug element
+    const bug = document.createElement('div');
+    bug.className = 'bug';
+    bug.textContent = 'BUG';
+    
+    // Check for collisions and place it
+    placeBug(bug);
+    bugs.add(bug);
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Wait for the DOM to be ready
+  const startButton = document.getElementById('start-btn');
+  startButton.addEventListener('click', initializeGame);
+});
+
+// A simple utility function
+function calculatePosition(container) {
+  const x = Math.random() * container.offsetWidth;
+  const y = Math.random() * container.offsetHeight;
+  return { x, y };
+}</code></pre>
+      </main>
+    </div>
+
+    <!-- Modal Câu hỏi Toán -->
+    <div
+      id="quiz-modal"
+      class="hidden absolute inset-0 modal-backdrop flex items-center justify-center z-50"
+    >
+      <div class="modal-content rounded-lg p-8 w-full max-w-md text-center">
+        <h2 class="text-2xl font-bold mb-4" id="quiz-question">3 + 5 = ?</h2>
+        <div class="grid grid-cols-2 gap-4 mb-4" id="quiz-answers">
+          <!-- Các nút đáp án sẽ được chèn vào đây -->
+        </div>
+        <div class="text-lg">Time left: <span id="quiz-timer">10</span>s</div>
+      </div>
+    </div>
+
+    <!-- Modal Bắt đầu/Kết thúc Game -->
+    <div
+      id="start-end-modal"
+      class="absolute inset-0 modal-backdrop flex items-center justify-center z-50"
+    >
+      <div class="modal-content rounded-lg p-8 w-full max-w-md text-center">
+        <h2 id="modal-title" class="text-3xl font-bold mb-2">Debug Frenzy</h2>
+        <p id="modal-message" class="mb-6">
+          Click vào các "BUG" màu đỏ để fix chúng trước khi thanh stress đầy!
+        </p>
+        <div id="modal-final-score" class="text-xl mb-6 hidden">
+          <p>Final Score: <span id="final-score-value">0</span></p>
+          <p>High Score: <span id="final-high-score-value">0</span></p>
+        </div>
+        <button
+          id="start-play-again-btn"
+          class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg text-xl transition-colors"
+        >
+          Start Game
+        </button>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // Lấy các element từ DOM
+        const gameCanvas = document.getElementById("game-canvas");
+        const scoreDisplay = document.getElementById("score");
+        const highScoreDisplay = document.getElementById("high-score");
+        const stressBar = document.getElementById("stress-bar");
+        const endGameBtn = document.getElementById("end-game-btn");
+
+        const quizModal = document.getElementById("quiz-modal");
+        const quizQuestion = document.getElementById("quiz-question");
+        const quizAnswersContainer = document.getElementById("quiz-answers");
+        const quizTimerDisplay = document.getElementById("quiz-timer");
+
+        const startEndModal = document.getElementById("start-end-modal");
+        const modalTitle = document.getElementById("modal-title");
+        const modalMessage = document.getElementById("modal-message");
+        const modalFinalScore = document.getElementById("modal-final-score");
+        const finalScoreValue = document.getElementById("final-score-value");
+        const finalHighScoreValue = document.getElementById(
+          "final-high-score-value",
+        );
+        const startPlayAgainBtn = document.getElementById(
+          "start-play-again-btn",
+        );
+
+        // Trạng thái game
+        let gameState = {
+          score: 0,
+          stress: 0,
+          highScore: 0,
+          isActive: false,
+          bugs: new Map(), // Lưu bug element và timeout của nó
+          bugSpawnInterval: 2000, // Bắt đầu 2s
+          minBugSpawnInterval: 500, // Tối thiểu 0.5s
+          difficultyIncreaseInterval: 30000, // Mỗi 30s
+          maxBugs: 15,
+          quiz: {
+            correctAnswer: 0,
+            timer: 10,
+            timerInterval: null,
+          },
+        };
+
+        let bugSpawner;
+        let difficultyUpdater;
+
+        // --- CÁC HÀM XỬ LÝ GAME ---
+
+        function startGame() {
+          // Reset trạng thái
+          gameState.score = 0;
+          gameState.stress = 0;
+          gameState.isActive = true;
+          gameState.bugSpawnInterval = 2000;
+
+          // Dọn dẹp bug cũ
+          gameState.bugs.forEach((bugData, bugElement) => {
+            clearTimeout(bugData.missTimeout);
+            bugElement.remove();
+          });
+          gameState.bugs.clear();
+
+          updateScoreUI();
+          updateStressUI();
+
+          // Ẩn modal và hiện giao diện game
+          startEndModal.classList.add("hidden");
+
+          // Bắt đầu vòng lặp game
+          bugSpawner = setInterval(spawnBug, gameState.bugSpawnInterval);
+          difficultyUpdater = setInterval(
+            increaseDifficulty,
+            gameState.difficultyIncreaseInterval,
+          );
+        }
+
+        function endGame(reason) {
+          if (!gameState.isActive) return;
+          gameState.isActive = false;
+
+          // Dừng tạo bug và tăng độ khó
+          clearInterval(bugSpawner);
+          clearInterval(difficultyUpdater);
+
+          // Dừng quiz nếu đang chạy
+          if (gameState.quiz.timerInterval) {
+            clearInterval(gameState.quiz.timerInterval);
+            quizModal.classList.add("hidden");
+          }
+
+          // Cập nhật high score
+          if (gameState.score > gameState.highScore) {
+            gameState.highScore = gameState.score;
+            localStorage.setItem("debugFrenzyHighScore", gameState.highScore);
+            updateHighScoreUI();
+          }
+
+          // Hiển thị modal kết thúc
+          modalTitle.textContent =
+            reason === "gameover" ? "GAME OVER!" : "Game Paused";
+          modalMessage.textContent =
+            reason === "gameover"
+              ? "Stress quá cao! Hãy nghỉ ngơi chút nhé."
+              : "Bạn đã chọn kết thúc game.";
+          finalScoreValue.textContent = gameState.score;
+          finalHighScoreValue.textContent = gameState.highScore;
+          modalFinalScore.classList.remove("hidden");
+          startPlayAgainBtn.textContent = "Play Again";
+          startEndModal.classList.remove("hidden");
+        }
+
+        function increaseDifficulty() {
+          if (gameState.bugSpawnInterval > gameState.minBugSpawnInterval) {
+            gameState.bugSpawnInterval -= 100; // Giảm 100ms
+            clearInterval(bugSpawner); // Xóa interval cũ
+            bugSpawner = setInterval(spawnBug, gameState.bugSpawnInterval); // Tạo interval mới nhanh hơn
+          }
+        }
+
+        // --- CÁC HÀM XỬ LÝ BUG ---
+
+        function spawnBug() {
+          if (!gameState.isActive || gameState.bugs.size >= gameState.maxBugs)
+            return;
+
+          const bug = document.createElement("div");
+          bug.textContent = "BUG";
+          bug.className =
+            "bug absolute bg-red-600 text-white font-bold p-2 rounded-md shadow-lg bug-spawn";
+
+          const canvasRect = gameCanvas.getBoundingClientRect();
+          // Đảm bảo bug không bị tràn ra ngoài
+          const bugWidth = 60;
+          const bugHeight = 40;
+          bug.style.left = `${Math.random() * (canvasRect.width - bugWidth)}px`;
+          bug.style.top = `${
+            Math.random() * (canvasRect.height - bugHeight)
+          }px`;
+
+          // Thời gian tồn tại của bug
+          const lifeTime = Math.random() * 2000 + 3000; // 3-5 giây
+
+          const missTimeout = setTimeout(() => missBug(bug), lifeTime);
+
+          bug.addEventListener("click", () => fixBug(bug));
+
+          gameState.bugs.set(bug, { missTimeout });
+          gameCanvas.appendChild(bug);
+        }
+
+        function fixBug(bug) {
+          if (!gameState.isActive || !gameState.bugs.has(bug)) return;
+
+          const bugData = gameState.bugs.get(bug);
+          clearTimeout(bugData.missTimeout);
+
+          bug.classList.remove("bug-spawn");
+          bug.classList.add("bug-fixed");
+
+          // Xóa bug sau khi animation kết thúc
+          setTimeout(() => bug.remove(), 300);
+
+          gameState.bugs.delete(bug);
+          showMathQuiz();
+        }
+
+        function missBug(bug) {
+          if (!gameState.isActive || !gameState.bugs.has(bug)) return;
+
+          bug.remove();
+          gameState.bugs.delete(bug);
+          updateStress(10); // Tăng stress khi miss bug
+        }
+
+        // --- CÁC HÀM XỬ LÝ QUIZ ---
+
+        function showMathQuiz() {
+          // Ngăn quiz mới khi đang có quiz
+          if (!quizModal.classList.contains("hidden")) return;
+
+          const operators = ["+", "-", "×", "÷"];
+          const operator =
+            operators[Math.floor(Math.random() * operators.length)];
+          let num1, num2;
+
+          if (operator === "+") {
+            num1 = Math.floor(Math.random() * 20) + 1;
+            num2 = Math.floor(Math.random() * 20) + 1;
+            gameState.quiz.correctAnswer = num1 + num2;
+          } else if (operator === "-") {
+            num1 = Math.floor(Math.random() * 20) + 1;
+            num2 = Math.floor(Math.random() * num1) + 1; // Đảm bảo kết quả không âm
+            gameState.quiz.correctAnswer = num1 - num2;
+          } else if (operator === "×") {
+            num1 = Math.floor(Math.random() * 10) + 1;
+            num2 = Math.floor(Math.random() * 10) + 1;
+            gameState.quiz.correctAnswer = num1 * num2;
+          } else {
+            // operator === '÷'
+            const divisor = Math.floor(Math.random() * 10) + 1;
+            const quotient = Math.floor(Math.random() * 10) + 1;
+            num1 = divisor * quotient;
+            num2 = divisor;
+            gameState.quiz.correctAnswer = quotient;
+          }
+
+          quizQuestion.textContent = `${num1} ${operator} ${num2} = ?`;
+
+          // Tạo các đáp án
+          const answers = new Set([gameState.quiz.correctAnswer]);
+          while (answers.size < 4) {
+            const wrongAnswer =
+              gameState.quiz.correctAnswer +
+              (Math.floor(Math.random() * 10) + 1) *
+                (Math.random() > 0.5 ? 1 : -1);
+            if (wrongAnswer !== gameState.quiz.correctAnswer)
+              answers.add(wrongAnswer);
+          }
+
+          // Trộn đáp án
+          const shuffledAnswers = Array.from(answers).sort(
+            () => Math.random() - 0.5,
+          );
+          quizAnswersContainer.innerHTML = "";
+          shuffledAnswers.forEach((answer) => {
+            const button = document.createElement("button");
+            button.textContent = answer;
+            button.className =
+              "bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition-colors";
+            button.onclick = () => checkAnswer(answer);
+            quizAnswersContainer.appendChild(button);
+          });
+
+          // Hiển thị modal và bắt đầu timer
+          quizModal.classList.remove("hidden");
+          startQuizTimer();
+        }
+
+        function startQuizTimer() {
+          gameState.quiz.timer = 10;
+          quizTimerDisplay.textContent = gameState.quiz.timer;
+
+          gameState.quiz.timerInterval = setInterval(() => {
+            gameState.quiz.timer--;
+            quizTimerDisplay.textContent = gameState.quiz.timer;
+            if (gameState.quiz.timer <= 0) {
+              checkAnswer(null); // Hết giờ, coi như trả lời sai
+            }
+          }, 1000);
+        }
+
+        function checkAnswer(selectedAnswer) {
+          clearInterval(gameState.quiz.timerInterval);
+          gameState.quiz.timerInterval = null;
+
+          if (selectedAnswer === gameState.quiz.correctAnswer) {
+            updateScore(10);
+          } else {
+            updateStress(5); // Tăng stress khi trả lời sai
+          }
+          quizModal.classList.add("hidden");
+        }
+
+        // --- CÁC HÀM CẬP NHẬT UI ---
+
+        function updateScore(points) {
+          gameState.score += points;
+          updateScoreUI();
+        }
+
+        function updateStress(amount) {
+          gameState.stress += amount;
+          if (gameState.stress > 100) gameState.stress = 100;
+          updateStressUI();
+          if (gameState.stress >= 100) {
+            endGame("gameover");
+          }
+        }
+
+        function updateScoreUI() {
+          scoreDisplay.textContent = gameState.score;
+        }
+
+        function updateHighScoreUI() {
+          highScoreDisplay.textContent = gameState.highScore;
+        }
+
+        function updateStressUI() {
+          stressBar.style.width = `${gameState.stress}%`;
+          if (gameState.stress < 40) {
+            stressBar.style.backgroundColor = "#4caf50"; // Green
+          } else if (gameState.stress < 75) {
+            stressBar.style.backgroundColor = "#ffeb3b"; // Yellow
+          } else {
+            stressBar.style.backgroundColor = "#f44336"; // Red
+          }
+        }
+
+        // --- KHỞI TẠO VÀ SỰ KIỆN ---
+
+        function initialize() {
+          gameState.highScore =
+            parseInt(localStorage.getItem("debugFrenzyHighScore")) || 0;
+          updateHighScoreUI();
+
+          startPlayAgainBtn.addEventListener("click", startGame);
+          endGameBtn.addEventListener("click", () => endGame("paused"));
+        }
+
+        initialize();
+      });
+    </script>
+  </body>
+</html>
